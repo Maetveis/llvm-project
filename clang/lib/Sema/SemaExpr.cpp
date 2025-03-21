@@ -10557,7 +10557,7 @@ static void checkArithmeticNull(Sema &S, ExprResult &LHS, ExprResult &RHS,
 
 static void DetectPrecisionLossInComplexDivision(Sema &S, QualType DivisorTy,
                                                  SourceLocation OpLoc) {
-  // Either real/real or complex/real division.
+  // If the divisor is real, then this is real/real or complex/real division.
   // Either way there can be no precision loss.
   auto *CT = DivisorTy->getAs<ComplexType>();
   if (!CT)
