@@ -504,21 +504,12 @@ for unsupported_pair in unsupported_sequence:
         unsupported_pair.prefix + unsupported_pair.option_name
     )
 
-args.general_test_path = (
-    "../test/Driver/unsupported_in_drivermode.c"
-    if not args.general_test_path
-    else args.general_test_path
-)
-args.flang_test_path = (
-    "../test/Driver/flang/unsupported_in_flang.f90"
-    if not args.flang_test_path
-    else args.flang_test_path
-)
-args.flang_fc1_test_path = (
-    "../../flang/test/Driver/unsupported_in_flang_fc1.f90"
-    if not args.flang_fc1_test_path
-    else args.flang_fc1_test_path
-)
+args.general_test_path = args.general_test_path or os.path.join(
+    os.path.dirname(__file__), "../test/Driver/unsupported_in_drivermode.c")
+args.flang_test_path = args.flang_test_path or os.path.join(
+    os.path.dirname(__file__), "../test/Driver/flang/unsupported_in_flang.f90")
+args.flang_fc1_test_path = args.flang_fc1_test_path or os.path.join(
+    os.path.dirname(__file__), "../../flang/test/Driver/unsupported_in_flang_fc1.f90")
 
 write_lit_test(
     args.general_test_path,
