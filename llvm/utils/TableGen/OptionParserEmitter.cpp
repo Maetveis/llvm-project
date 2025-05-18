@@ -13,6 +13,7 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/InterleavedRange.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/StringToOffsetTable.h"
 #include "llvm/TableGen/TableGenBackend.h"
@@ -248,6 +249,67 @@ static void emitHelpTextsForVariants(
   OS << " }})";
 }
 
+// The Visibility or Flags of an option is only influenced by the visibility of its
+// direct parent group. The parents of groups are only used for
+// documentation organization.
+static void
+diagnoseLeafOnlyFields(ArrayRef<const Record *> Groups) {
+  for (const Record *R : Groups) {
+    const Record *SuperRec = R->getValueAsOptionalDef("Group");
+    if (!SuperRec)
+      continue;
+
+    for (const char *Field : {"Flags", "Visibility"}) {
+      // The field is explicitly overriden, assume that the user
+      // knows about the limitations.
+      if (!R->getValueAsListInit(Field)->empty())
+        continue;
+
+      if (!SuperRec->getValueAsListInit(Field)->empty()) {
+        PrintWarning(R->getLoc(),
+                     Twine("Option group has a parent group with non-empty '") +
+                         Field + "'");
+        PrintNote(SuperRec->getLoc(), "Parent group is defined here");
+      }
+    }
+  }
+}
+
+static void diagnoseDefaultVisibilityButGroup(ArrayRef<const Record *> Options,
+                                              const Record *DefaultVis) {
+  for (const Record *R : Options) {
+    // Visibility is explicitly set, assume user is aware
+    // of how Group visibility works.
+    if (R->isSubClassOf("Visibility"))
+      continue;
+
+    const std::vector<const Record *> Vis =
+        R->getValueAsListOfDefs("Visibility");
+
+    if (Vis.size() != 1 || Vis[0] != DefaultVis)
+      continue;
+
+    // Visibility is not explicitly set, but the group is.
+    const Record *Group = R->getValueAsOptionalDef("Group");
+    if (!Group)
+      continue;
+
+    const std::vector<const Record *> GroupVis =
+        Group->getValueAsListOfDefs("Visibility");
+    if (GroupVis.empty())
+      continue;
+
+    if (std::find(GroupVis.begin(), GroupVis.end(), DefaultVis) ==
+        GroupVis.end()) {
+      PrintWarning(
+          R->getLoc(),
+          "Default visibility will be included in the option's visibility");
+      PrintNote(R->getLoc(), "This is probably not intended, as its group's "
+                             "visibility doesn't include it");
+    }
+  }
+}
+
 /// OptionParserEmitter - This tablegen backend takes an input .td file
 /// describing a list of options and emits a data structure for parsing and
 /// working with those options when given an input command line.
@@ -255,8 +317,11 @@ static void emitOptionParser(const RecordKeeper &Records, raw_ostream &OS) {
   // Get the option groups and options.
   ArrayRef<const Record *> Groups =
       Records.getAllDerivedDefinitions("OptionGroup");
+  diagnoseLeafOnlyFields(Groups);
+
   std::vector<const Record *> Opts = Records.getAllDerivedDefinitions("Option");
   llvm::sort(Opts, IsOptionRecordsLess);
+  diagnoseDefaultVisibilityButGroup(Opts, Records.getDef("DefaultVis"));
 
   emitSourceFileHeader("Option Parsing Definitions", OS);
 
